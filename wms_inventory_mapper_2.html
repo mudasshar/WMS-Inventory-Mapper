@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>WMS Inventory Mapper</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;--bg2:#161b27;--bg3:#1e2535;--bg4:#252d40;
+  --border:#2e3a52;--border2:#3d4d6b;
+  --text:#e8edf5;--text2:#9aa5bb;--text3:#6b7a94;
+  --accent:#4f8ef7;--accent2:#3a6fd8;
+  --green:#34c78a;--amber:#f5a623;--red:#f05757;
+  --row-h:36px;
+  --font:'SF Pro Display',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;height:100vh;overflow:hidden}
+.app{display:flex;flex-direction:column;height:100vh}
+/* topbar */
+.topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0;min-height:50px}
+.logo{font-size:15px;font-weight:700;color:var(--accent);display:flex;align-items:center;gap:7px}
+.logo i{font-size:18px}
+.topbar-right{display:flex;gap:6px;margin-left:auto;align-items:center;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:6px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-size:12px;cursor:pointer;white-space:nowrap;font-family:var(--font);transition:background .1s,border-color .1s}
+.btn:hover{background:var(--bg4);border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent2);color:#fff}
+.btn.primary:hover{background:var(--accent2)}
+.btn.green{background:var(--green);border-color:#2aae77;color:#fff}
+.btn.green:hover{filter:brightness(0.9)}
+.btn i{font-size:14px;pointer-events:none}
+/* upload */
+.upload-zone{flex:1;display:flex;align-items:center;justify-content:center}
+.upload-card{background:var(--bg2);border:2px dashed var(--border2);border-radius:14px;padding:52px 72px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;max-width:480px;width:90%}
+.upload-card:hover,.upload-card.drag{border-color:var(--accent);background:rgba(79,142,247,.06)}
+.upload-card .uicon{font-size:44px;color:var(--accent);margin-bottom:14px}
+.upload-card h2{font-size:17px;font-weight:600;margin-bottom:6px}
+.upload-card p{color:var(--text2);font-size:13px;line-height:1.6}
+.upload-card .chips{margin-top:14px;display:flex;gap:7px;justify-content:center}
+.chip{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;background:rgba(79,142,247,.15);color:var(--accent)}
+#fileInput{display:none}
+/* main */
+.main-layout{flex:1;display:flex;flex-direction:column;overflow:hidden}
+/* dashboard */
+.dashboard{background:var(--bg2);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;gap:10px;flex-shrink:0;overflow-x:auto}
+.stat{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 14px;min-width:118px;flex-shrink:0}
+.stat .slabel{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.stat .sval{font-size:18px;font-weight:700}
+.sval.blue{color:var(--accent)} .sval.green{color:var(--green)} .sval.amber{color:var(--amber)}
+/* toolbar */
+.toolbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:8px 16px;display:flex;gap:8px;align-items:center;flex-shrink:0;flex-wrap:wrap}
+.srch{position:relative;flex:1;min-width:180px}
+.srch i{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:15px;pointer-events:none}
+.srch input{width:100%;padding:6px 10px 6px 30px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:var(--font);outline:none}
+.srch input:focus{border-color:var(--accent)}
+select.flt{padding:6px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:var(--font);outline:none;cursor:pointer}
+select.flt:focus{border-color:var(--accent)}
+#rowcount{color:var(--text3);font-size:11px;white-space:nowrap}
+/* virtual table */
+.tbl-outer{flex:1;overflow:hidden;position:relative;display:flex;flex-direction:column}
+.tbl-head-wrap{overflow:hidden;flex-shrink:0;background:var(--bg2);border-bottom:1px solid var(--border);position:relative;z-index:10}
+.tbl-head-scroll{overflow:hidden}
+table.head-tbl{border-collapse:collapse;table-layout:fixed}
+table.head-tbl th{
+  padding:8px 12px;font-size:11px;font-weight:600;color:var(--text3);
+  text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;
+  border-right:1px solid var(--border);cursor:grab;user-select:none;
+  background:var(--bg2);height:38px;position:relative;
+}
+table.head-tbl th:last-child{border-right:none}
+.th-inner{display:flex;align-items:center;gap:5px}
+.th-btn{opacity:0;background:none;border:none;color:var(--text3);cursor:pointer;padding:1px 3px;border-radius:3px;font-size:13px;display:inline-flex;align-items:center;transition:opacity .1s,color .1s;flex-shrink:0}
+th:hover .th-btn{opacity:1}
+.th-btn:hover{color:var(--red)}
+th.drag-over{border-left:2px solid var(--accent)}
+th.dragging{opacity:.4}
+/* body scroll area */
+.tbl-body-scroll{flex:1;overflow:auto;position:relative}
+.tbl-spacer-top{pointer-events:none}
+.tbl-spacer-bot{pointer-events:none}
+table.body-tbl{border-collapse:collapse;table-layout:fixed;position:relative}
+table.body-tbl td{
+  padding:0 12px;font-size:12px;color:var(--text);
+  border-bottom:1px solid var(--border);border-right:1px solid var(--border);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  height:var(--row-h);line-height:var(--row-h);
+}
+table.body-tbl td:last-child{border-right:none}
+table.body-tbl tr:hover td{background:var(--bg2)}
+/* frozen cols */
+.frozen-head{position:sticky;left:0;z-index:12;background:var(--bg2)!important}
+.frozen-cell{position:sticky;left:0;background:var(--bg)!important;z-index:4}
+tr:hover .frozen-cell{background:var(--bg2)!important}
+/* status badges */
+.sbadge{display:inline-block;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:600;line-height:18px}
+.s-active{background:rgba(52,199,138,.15);color:var(--green)}
+.s-inactive{background:rgba(240,87,87,.15);color:var(--red)}
+.s-blocked{background:rgba(245,166,35,.15);color:var(--amber)}
+.s-other{background:rgba(79,142,247,.15);color:var(--accent)}
+/* edit overlay */
+.cell-edit-overlay{
+  position:fixed;z-index:200;
+  background:var(--bg3);border:1.5px solid var(--accent);border-radius:5px;
+  padding:4px 8px;font-size:12px;color:var(--text);font-family:var(--font);
+  outline:none;min-width:80px;box-shadow:0 4px 20px rgba(0,0,0,.5);
+}
+/* footer */
+.footer{background:var(--bg2);border-top:1px solid var(--border);padding:6px 16px;display:flex;align-items:center;gap:14px;font-size:11px;color:var(--text3);flex-shrink:0}
+/* modals */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:300}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:12px;padding:22px;width:540px;max-height:85vh;overflow-y:auto;max-width:95vw}
+.modal h3{font-size:15px;font-weight:600;margin-bottom:5px;display:flex;align-items:center;gap:7px}
+.modal p{color:var(--text2);font-size:12px;margin-bottom:16px}
+.map-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.map-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.map-dot.ok{background:var(--green)} .map-dot.warn{background:var(--amber)}
+.map-label{font-size:12px;width:150px;flex-shrink:0;color:var(--text)}
+.map-sel{flex:1;padding:6px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:var(--font);outline:none}
+.map-sel:focus{border-color:var(--accent)}
+.modal-btns{display:flex;gap:8px;margin-top:16px}
+.col-inp{width:100%;padding:7px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;font-family:var(--font);outline:none;margin-bottom:12px}
+.col-inp:focus{border-color:var(--accent)}
+/* audit */
+.audit-panel{position:fixed;right:0;top:0;bottom:0;width:300px;background:var(--bg2);border-left:1px solid var(--border);padding:14px;z-index:50;overflow-y:auto;display:flex;flex-direction:column;gap:6px;box-shadow:-4px 0 24px rgba(0,0,0,.5)}
+.audit-entry{font-size:11px;color:var(--text2);padding:7px 9px;background:var(--bg3);border-radius:5px;line-height:1.5;border-left:2px solid var(--accent)}
+.audit-time{color:var(--text3);font-size:10px;margin-top:2px}
+.hidden{display:none!important}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="logo"><i class="ti ti-database-import"></i>WMS Inventory Mapper</div>
+    <div id="topbarRight" class="topbar-right hidden">
+      <button class="btn" onclick="doUndo()"><i class="ti ti-arrow-back-up"></i>Undo</button>
+      <button class="btn" onclick="doRedo()"><i class="ti ti-arrow-forward-up"></i>Redo</button>
+      <button class="btn" onclick="openAddCol()"><i class="ti ti-column-insert-right"></i>Add Column</button>
+      <button class="btn" onclick="saveLayout()"><i class="ti ti-device-floppy"></i>Save Layout</button>
+      <button class="btn" onclick="loadLayout()"><i class="ti ti-upload"></i>Load Layout</button>
+      <button class="btn" onclick="toggleAudit()"><i class="ti ti-history"></i>Audit</button>
+      <button class="btn green" onclick="exportXLSX()"><i class="ti ti-file-spreadsheet"></i>Export XLSX</button>
+      <button class="btn" onclick="resetApp()"><i class="ti ti-refresh"></i>New File</button>
+    </div>
+  </div>
+
+  <div id="uploadView" class="upload-zone">
+    <div class="upload-card" id="dropZone" onclick="document.getElementById('fileInput').click()">
+      <div class="uicon"><i class="ti ti-cloud-upload"></i></div>
+      <h2>Upload Inventory File</h2>
+      <p>Drag &amp; drop your CSV or XLSX here<br/>or click to browse</p>
+      <div class="chips"><span class="chip">CSV</span><span class="chip">XLSX</span><span class="chip">XLS</span></div>
+    </div>
+    <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" onchange="handleFile(event)"/>
+  </div>
+
+  <div id="mainView" class="main-layout hidden">
+    <div class="dashboard" id="dashboard"></div>
+    <div class="toolbar">
+      <div class="srch"><i class="ti ti-search"></i><input id="searchInput" placeholder="Search SKU, Item ID, Product, Location, Batch..." oninput="scheduleFilter()"/></div>
+      <select class="flt" id="wFilter" onchange="scheduleFilter()"><option value="">All Warehouses</option></select>
+      <select class="flt" id="sFilter" onchange="scheduleFilter()"><option value="">All Status</option></select>
+      <select class="flt" id="ltFilter" onchange="scheduleFilter()"><option value="">All Location Types</option></select>
+      <select class="flt" id="bFilter" onchange="scheduleFilter()"><option value="">All Blocked</option><option value="Y">Blocked: Yes</option><option value="N">Blocked: No</option></select>
+      <span id="rowcount"></span>
+    </div>
+    <div class="tbl-outer" id="tblOuter">
+      <div class="tbl-head-wrap" id="headWrap">
+        <div class="tbl-head-scroll" id="headScroll">
+          <table class="head-tbl" id="headTbl"><thead><tr id="headRow"></tr></thead></table>
+        </div>
+      </div>
+      <div class="tbl-body-scroll" id="bodyScroll">
+        <div class="tbl-spacer-top" id="spacerTop"></div>
+        <table class="body-tbl" id="bodyTbl"><tbody id="bodyTbody"></tbody></table>
+        <div class="tbl-spacer-bot" id="spacerBot"></div>
+      </div>
+    </div>
+    <div class="footer">
+      <span><i class="ti ti-table"></i>&nbsp;<span id="fRows">0</span> rows</span>
+      <span><i class="ti ti-columns"></i>&nbsp;<span id="fCols">0</span> columns</span>
+      <span style="margin-left:auto">Drag headers to reorder · Click cell to edit · Hover header for options</span>
+    </div>
+  </div>
+</div>
+
+<!-- Mapping Modal -->
+<div id="mapOverlay" class="overlay hidden">
+  <div class="modal">
+    <h3><i class="ti ti-git-merge" style="color:var(--accent)"></i>Column Mapping</h3>
+    <p>Map source columns to required WMS columns. Green = auto-matched. Yellow = needs selection.</p>
+    <div id="mapRows"></div>
+    <div class="modal-btns">
+      <button class="btn primary" style="flex:1" onclick="confirmMap()"><i class="ti ti-check"></i>Confirm &amp; Load</button>
+      <button class="btn" onclick="hide('mapOverlay')"><i class="ti ti-x"></i>Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Column Modal -->
+<div id="addColOverlay" class="overlay hidden">
+  <div class="modal" style="width:360px">
+    <h3><i class="ti ti-column-insert-right" style="color:var(--accent)"></i>Add Custom Column</h3>
+    <p>New column will be appended and editable.</p>
+    <input class="col-inp" id="newColName" placeholder="Column name (e.g. NOTES, EXPIRY DATE)..." onkeydown="if(event.key==='Enter')confirmAddCol()"/>
+    <div class="modal-btns">
+      <button class="btn primary" style="flex:1" onclick="confirmAddCol()"><i class="ti ti-plus"></i>Add</button>
+      <button class="btn" onclick="hide('addColOverlay')"><i class="ti ti-x"></i>Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Audit Panel -->
+<div id="auditPanel" class="audit-panel hidden">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+    <strong style="font-size:13px"><i class="ti ti-history" style="color:var(--accent)"></i> Audit Log</strong>
+    <button class="btn" style="padding:3px 7px" onclick="toggleAudit()"><i class="ti ti-x"></i></button>
+  </div>
+  <div id="auditList" style="display:flex;flex-direction:column;gap:5px"></div>
+</div>
+
+<!-- Cell edit input (floating) -->
+<input id="cellEditor" class="cell-edit-overlay hidden" spellcheck="false"/>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────────────
+const REQ = ['ITEM ID','PRODUCT NAME','SKU','BATCH NUMBER','LOCATION','AVAILABLE QTY','RESERVED QTY','TOTAL','BLOCKED','LOCATION TYPE','WAREHOUSE','WAREHOUSE NAME'];
+const SEARCH_FIELDS = ['SKU','ITEM ID','PRODUCT NAME','LOCATION','BATCH NUMBER'];
+const COL_W = 160; // default column width px
+const ROW_H = 36;
+const BUFFER = 15; // extra rows above/below viewport
+
+let data = [];          // full dataset, array of objects
+let filtered = [];      // index array into data[]
+let columns = [];       // column name array (current order)
+let colWidths = {};     // col -> px width
+let frozenCols = new Set(['ITEM ID','SKU','LOCATION']);
+let srcHeaders = [];
+let mapping = {};
+let auditLog = [];
+let undoStack = [], redoStack = [];
+let showAudit = false;
+let dragSrc = null;
+let filterTimer = null;
+
+// Virtual scroll state
+let vsStart = 0, vsEnd = 0, totalRows = 0;
+
+// ─── Utilities ────────────────────────────────────────────────────────────────
+function hide(id){document.getElementById(id).classList.add('hidden')}
+function show(id){document.getElementById(id).classList.remove('hidden')}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+function debounce(fn,ms){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)}}
+
+// ─── File upload ──────────────────────────────────────────────────────────────
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag')});
+dz.addEventListener('dragleave',()=>dz.classList.remove('drag'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag');const f=e.dataTransfer.files[0];if(f)processFile(f)});
+function handleFile(e){const f=e.target.files[0];if(f)processFile(f)}
+
+function processFile(file){
+  const ext = file.name.split('.').pop().toLowerCase();
+  if(!['csv','xlsx','xls'].includes(ext)){alert('Please upload CSV or XLSX/XLS.');return}
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try{
+      const wb = ext==='csv' ? XLSX.read(ev.target.result,{type:'string'}) : XLSX.read(ev.target.result,{type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(ws,{defval:''});
+      if(!raw.length){alert('File is empty.');return}
+      srcHeaders = Object.keys(raw[0]);
+      // store raw temporarily
+      data = raw;
+      autoMap();
+      showMappingModal();
+    }catch(e){alert('Error reading file: '+e.message)}
+  };
+  ext==='csv' ? reader.readAsText(file) : reader.readAsArrayBuffer(file);
+}
+
+function autoMap(){
+  mapping = {};
+  const used = new Set();
+  REQ.forEach(r=>{
+    const m = srcHeaders.find(h=>{
+      const a = h.trim().toUpperCase().replace(/[\s_\-\.]+/g,'');
+      const b = r.toUpperCase().replace(/[\s_\-\.]+/g,'');
+      return a===b;
+    });
+    if(m&&!used.has(m)){mapping[r]=m;used.add(m)}else mapping[r]='';
+  });
+}
+
+function showMappingModal(){
+  const c = document.getElementById('mapRows');
+  c.innerHTML = '';
+  REQ.forEach(r=>{
+    const matched = !!mapping[r];
+    c.insertAdjacentHTML('beforeend',`
+      <div class="map-row">
+        <div class="map-dot ${matched?'ok':'warn'}"></div>
+        <span class="map-label">${esc(r)}</span>
+        <select class="map-sel" id="ms_${r.replace(/ /g,'_')}">
+          <option value="">— skip —</option>
+          ${srcHeaders.map(h=>`<option value="${esc(h)}"${mapping[r]===h?' selected':''}>${esc(h)}</option>`).join('')}
+        </select>
+      </div>`);
+  });
+  show('mapOverlay');
+}
+
+function confirmMap(){
+  REQ.forEach(r=>{
+    const el = document.getElementById('ms_'+r.replace(/ /g,'_'));
+    if(el) mapping[r] = el.value;
+  });
+  hide('mapOverlay');
+  buildData();
+}
+
+function buildData(){
+  const raw = data; // raw rows from XLSX
+  // Build normalized rows using numeric IDs for O(1) lookup
+  data = raw.map((row,i)=>{
+    const out = {__id:i};
+    REQ.forEach(col=>{out[col] = mapping[col] ? String(row[mapping[col]]??'') : ''});
+    return out;
+  });
+  columns = [...REQ];
+  colWidths = {};
+  columns.forEach(c=>{colWidths[c]=COL_W});
+  filtered = data.map((_,i)=>i);
+  undoStack=[]; redoStack=[];
+  populateFilters();
+  updateDashboard();
+  initTable();
+  hide('uploadView');
+  show('mainView');
+  show('topbarRight');
+  logAudit('File loaded',`${data.length.toLocaleString()} rows · ${columns.length} columns`);
+}
+
+// ─── Filters ──────────────────────────────────────────────────────────────────
+function populateFilters(){
+  const wf=document.getElementById('wFilter'), sf=document.getElementById('sFilter'), lf=document.getElementById('ltFilter');
+  const wset=[...new Set(data.map(r=>r['WAREHOUSE']).filter(Boolean))].sort();
+  const sset=[...new Set(data.map(r=>r['STATUS']).filter(Boolean))].sort();
+  const lset=[...new Set(data.map(r=>r['LOCATION TYPE']).filter(Boolean))].sort();
+  wf.innerHTML='<option value="">All Warehouses</option>'+wset.map(v=>`<option>${esc(v)}</option>`).join('');
+  sf.innerHTML='<option value="">All Status</option>'+sset.map(v=>`<option>${esc(v)}</option>`).join('');
+  lf.innerHTML='<option value="">All Location Types</option>'+lset.map(v=>`<option>${esc(v)}</option>`).join('');
+}
+
+function scheduleFilter(){
+  clearTimeout(filterTimer);
+  filterTimer = setTimeout(runFilter, 80);
+}
+
+function runFilter(){
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const wf = document.getElementById('wFilter').value;
+  const sf = document.getElementById('sFilter').value;
+  const lf = document.getElementById('ltFilter').value;
+  const bf = document.getElementById('bFilter').value;
+  filtered = [];
+  for(let i=0;i<data.length;i++){
+    const r = data[i];
+    if(q){
+      let found=false;
+      for(let j=0;j<SEARCH_FIELDS.length;j++){if((r[SEARCH_FIELDS[j]]||'').toLowerCase().includes(q)){found=true;break}}
+      if(!found) continue;
+    }
+    if(wf && r['WAREHOUSE']!==wf) continue;
+    if(sf && r['STATUS']!==sf) continue;
+    if(lf && r['LOCATION TYPE']!==lf) continue;
+    if(bf){
+      const bv=(r['BLOCKED']||'').toUpperCase();
+      const isY=bv==='Y'||bv==='YES'||bv==='TRUE'||bv==='1';
+      if(bf==='Y'&&!isY) continue;
+      if(bf==='N'&&isY) continue;
+    }
+    filtered.push(i);
+  }
+  totalRows = filtered.length;
+  document.getElementById('rowcount').textContent =
+    filtered.length===data.length ? `${data.length.toLocaleString()} rows` : `${filtered.length.toLocaleString()} / ${data.length.toLocaleString()} rows`;
+  vsStart=-1; vsEnd=-1;
+  document.getElementById('bodyScroll').scrollTop=0;
+  renderHead();
+  forceRender();
+  updateFooter();
+}
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
+function updateDashboard(){
+  const rows=data;
+  const skus=new Set(rows.map(r=>r['SKU']).filter(Boolean)).size;
+  let avail=0,res=0,tot=0;
+  for(let i=0;i<rows.length;i++){avail+=parseFloat(rows[i]['AVAILABLE QTY'])||0;res+=parseFloat(rows[i]['RESERVED QTY'])||0;tot+=parseFloat(rows[i]['TOTAL'])||0}
+  const wh=new Set(rows.map(r=>r['WAREHOUSE']).filter(Boolean)).size;
+  const lc=new Set(rows.map(r=>r['LOCATION']).filter(Boolean)).size;
+  document.getElementById('dashboard').innerHTML=`
+    <div class="stat"><div class="slabel">Total SKUs</div><div class="sval blue">${skus.toLocaleString()}</div></div>
+    <div class="stat"><div class="slabel">Available Qty</div><div class="sval green">${Math.round(avail).toLocaleString()}</div></div>
+    <div class="stat"><div class="slabel">Reserved Qty</div><div class="sval amber">${Math.round(res).toLocaleString()}</div></div>
+    <div class="stat"><div class="slabel">Total Inventory</div><div class="sval">${Math.round(tot).toLocaleString()}</div></div>
+    <div class="stat"><div class="slabel">Warehouses</div><div class="sval">${wh}</div></div>
+    <div class="stat"><div class="slabel">Locations</div><div class="sval">${lc.toLocaleString()}</div></div>
+    <div class="stat"><div class="slabel">Total Rows</div><div class="sval">${rows.length.toLocaleString()}</div></div>`;
+}
+
+// ─── Virtual Table ────────────────────────────────────────────────────────────
+function initTable(){
+  const bs = document.getElementById('bodyScroll');
+  bs.addEventListener('scroll', onScroll, {passive:true});
+  // sync horizontal scroll of header with body
+  bs.addEventListener('scroll', ()=>{
+    document.getElementById('headScroll').scrollLeft = bs.scrollLeft;
+  }, {passive:true});
+  totalRows = filtered.length;
+  renderHead();
+  forceRender();
+  updateFooter();
+}
+
+function colTotalWidth(){
+  return columns.reduce((s,c)=>s+(colWidths[c]||COL_W),0);
+}
+
+function renderHead(){
+  const row = document.getElementById('headRow');
+  // Calculate frozen left offsets
+  const frozenOffset = {};
+  let fl = 0;
+  columns.forEach(c=>{if(frozenCols.has(c)){frozenOffset[c]=fl;fl+=(colWidths[c]||COL_W)}});
+
+  let html = '';
+  columns.forEach((col,i)=>{
+    const w = colWidths[col]||COL_W;
+    const frz = frozenCols.has(col);
+    const style = `width:${w}px;min-width:${w}px;max-width:${w}px;${frz?`position:sticky;left:${frozenOffset[col]}px;z-index:12;background:var(--bg2);`:''}`;
+    html += `<th style="${style}" draggable="true" data-idx="${i}"
+      ondragstart="dStart(event,${i})" ondragover="dOver(event,${i})" ondrop="dDrop(event,${i})" ondragleave="dLeave(event)">
+      <div class="th-inner">
+        ${frz?`<i class="ti ti-pin" style="font-size:10px;color:var(--accent);flex-shrink:0" aria-hidden="true"></i>`:''}
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis">${esc(col)}</span>
+        <button class="th-btn" title="Remove" onclick="event.stopPropagation();removeCol(${i})"><i class="ti ti-x" aria-hidden="true"></i></button>
+        <button class="th-btn" title="${frz?'Unpin':'Pin'}" onclick="event.stopPropagation();toggleFreeze(${i})"><i class="ti ti-${frz?'pin-off':'pin'}" aria-hidden="true"></i></button>
+      </div>
+    </th>`;
+  });
+  row.innerHTML = html;
+  // set table width
+  const tw = colTotalWidth();
+  document.getElementById('headTbl').style.width = tw+'px';
+  document.getElementById('bodyTbl').style.width = tw+'px';
+}
+
+const onScroll = debounce(()=>renderBody(false), 10);
+
+// force=true bypasses the vsStart/vsEnd cache (use after column structure changes)
+function forceRender(){vsStart=-1;vsEnd=-1;renderBody(true);}
+
+function renderBody(force){
+  const bs = document.getElementById('bodyScroll');
+  const viewH = bs.clientHeight || 600;
+  const scrollTop = bs.scrollTop;
+
+  const start = Math.max(0, Math.floor(scrollTop/ROW_H) - BUFFER);
+  const end   = Math.min(filtered.length, Math.ceil((scrollTop+viewH)/ROW_H) + BUFFER);
+
+  if(!force && start===vsStart && end===vsEnd) return; // nothing changed
+  vsStart=start; vsEnd=end;
+
+  const topPx  = start * ROW_H;
+  const botPx  = Math.max(0, (filtered.length - end) * ROW_H);
+  document.getElementById('spacerTop').style.height = topPx+'px';
+  document.getElementById('spacerBot').style.height = botPx+'px';
+
+  // Calculate frozen offsets once
+  const frozenOffset = {};
+  let fl=0;
+  columns.forEach(c=>{if(frozenCols.has(c)){frozenOffset[c]=fl;fl+=(colWidths[c]||COL_W)}});
+
+  const tbody = document.getElementById('bodyTbody');
+  // Build HTML string — fastest DOM update method
+  let html = '';
+  for(let vi=start;vi<end;vi++){
+    const ri = filtered[vi]; // actual data index
+    const row = data[ri];
+    html += `<tr data-ri="${ri}">`;
+    for(let ci=0;ci<columns.length;ci++){
+      const col = columns[ci];
+      const w = colWidths[col]||COL_W;
+      const frz = frozenCols.has(col);
+      const val = row[col]??'';
+      const display = renderCell(col, val);
+      const frzStyle = frz ? `position:sticky;left:${frozenOffset[col]}px;background:var(--bg);` : '';
+      html += `<td style="width:${w}px;min-width:${w}px;max-width:${w}px;${frzStyle}" class="${frz?'frozen-cell':''}" data-ci="${ci}" onclick="startEdit(event,${ri},${ci})">${display}</td>`;
+    }
+    html += '</tr>';
+  }
+  tbody.innerHTML = html;
+}
+
+function renderCell(col, val){
+  if(!val) return '';
+  const v = esc(val);
+  if(col==='STATUS'){
+    const lv=val.toLowerCase();
+    const cls=lv.includes('active')&&!lv.includes('in')?'s-active':lv.includes('inactive')?'s-inactive':lv.includes('block')?'s-blocked':'s-other';
+    return `<span class="sbadge ${cls}">${v}</span>`;
+  }
+  if(col==='BLOCKED'){
+    const isY=['y','yes','true','1'].includes(val.toLowerCase());
+    return `<span class="sbadge ${isY?'s-blocked':'s-active'}">${v}</span>`;
+  }
+  return v;
+}
+
+function updateFooter(){
+  document.getElementById('fRows').textContent = filtered.length.toLocaleString();
+  document.getElementById('fCols').textContent = columns.length;
+}
+
+// ─── Drag/drop column reorder ─────────────────────────────────────────────────
+function dStart(e,i){dragSrc=i;e.currentTarget.classList.add('dragging')}
+function dOver(e,i){e.preventDefault();if(i!==dragSrc)e.currentTarget.classList.add('drag-over')}
+function dLeave(e){e.currentTarget.classList.remove('drag-over')}
+function dDrop(e,i){
+  e.preventDefault();
+  document.querySelectorAll('th').forEach(t=>t.classList.remove('drag-over','dragging'));
+  if(dragSrc===null||dragSrc===i){dragSrc=null;return}
+  saveUndo();
+  const col=columns.splice(dragSrc,1)[0];
+  columns.splice(i,0,col);
+  dragSrc=null;
+  logAudit('Reorder',`"${col}" → position ${i+1}`);
+  renderHead();
+  forceRender();
+}
+
+// ─── Remove / freeze column ───────────────────────────────────────────────────
+function removeCol(i){
+  if(!confirm(`Remove column "${columns[i]}"?`)) return;
+  saveUndo();
+  const col=columns.splice(i,1)[0];
+  logAudit('Remove col',`"${col}" removed`);
+  renderHead(); forceRender(); updateFooter();
+}
+
+function toggleFreeze(i){
+  const col=columns[i];
+  frozenCols.has(col)?frozenCols.delete(col):frozenCols.add(col);
+  renderHead(); forceRender();
+}
+
+// ─── Add column ───────────────────────────────────────────────────────────────
+function openAddCol(){
+  document.getElementById('newColName').value='';
+  show('addColOverlay');
+  setTimeout(()=>document.getElementById('newColName').focus(),80);
+}
+
+function confirmAddCol(){
+  const name=document.getElementById('newColName').value.trim().toUpperCase();
+  if(!name){alert('Enter a column name.');return}
+  if(columns.includes(name)){alert(`"${name}" already exists.`);return}
+  saveUndo();
+  columns.push(name);
+  colWidths[name]=COL_W;
+  // Add field to all rows (no DOM rebuild needed for data)
+  for(let i=0;i<data.length;i++) if(data[i][name]===undefined) data[i][name]='';
+  hide('addColOverlay');
+  logAudit('Add col',`"${name}" added`);
+  renderHead();
+  forceRender();
+  updateFooter();
+}
+
+// ─── Cell editing (floating input, no contenteditable) ────────────────────────
+let editRi=-1, editCi=-1;
+const cellEd = document.getElementById('cellEditor');
+
+cellEd.addEventListener('blur', commitEdit);
+cellEd.addEventListener('keydown', e=>{
+  if(e.key==='Enter'){e.preventDefault();commitEdit()}
+  if(e.key==='Escape'){hide('cellEditor');editRi=-1}
+});
+
+function startEdit(e, ri, ci){
+  // commit any open edit first
+  if(editRi>=0) commitEdit();
+  const td = e.currentTarget;
+  const rect = td.getBoundingClientRect();
+  const col = columns[ci];
+  const val = data[ri][col]??'';
+
+  editRi=ri; editCi=ci;
+  cellEd.value = val;
+  cellEd.style.left  = rect.left+'px';
+  cellEd.style.top   = rect.top+'px';
+  cellEd.style.width = Math.max(rect.width,120)+'px';
+  cellEd.style.height= rect.height+'px';
+  cellEd.style.lineHeight = rect.height+'px';
+  show('cellEditor');
+  cellEd.focus();
+  cellEd.select();
+}
+
+function commitEdit(){
+  if(editRi<0) return;
+  const col = columns[editCi];
+  const oldVal = data[editRi][col]??'';
+  const newVal = cellEd.value;
+  if(oldVal!==newVal){
+    saveUndo();
+    data[editRi][col]=newVal;
+    logAudit('Edit',`Row ${editRi+1} · "${col}": "${oldVal}"→"${newVal}"`);
+    updateDashboard();
+    // refresh only the affected visible row
+    const vi = filtered.indexOf(editRi);
+    if(vi>=vsStart && vi<vsEnd){
+      const tbody=document.getElementById('bodyTbody');
+      const trs=tbody.querySelectorAll('tr');
+      const idx=vi-vsStart;
+      if(trs[idx]){
+        const tds=trs[idx].querySelectorAll('td');
+        if(tds[editCi]) tds[editCi].innerHTML=renderCell(col,newVal);
+      }
+    }
+  }
+  hide('cellEditor');
+  editRi=-1; editCi=-1;
+}
+
+// close editor on outside click
+document.addEventListener('mousedown', e=>{
+  if(editRi>=0 && e.target!==cellEd) commitEdit();
+});
+
+// ─── Undo / Redo ──────────────────────────────────────────────────────────────
+function saveUndo(){
+  undoStack.push({data:data.map(r=>({...r})),cols:[...columns]});
+  if(undoStack.length>30) undoStack.shift();
+  redoStack=[];
+}
+function doUndo(){
+  if(!undoStack.length){alert('Nothing to undo.');return}
+  redoStack.push({data:data.map(r=>({...r})),cols:[...columns]});
+  const s=undoStack.pop();
+  data=s.data; columns=s.cols;
+  runFilter(); updateDashboard();
+  logAudit('Undo','Reverted last change');
+}
+function doRedo(){
+  if(!redoStack.length){alert('Nothing to redo.');return}
+  undoStack.push({data:data.map(r=>({...r})),cols:[...columns]});
+  const s=redoStack.pop();
+  data=s.data; columns=s.cols;
+  runFilter(); updateDashboard();
+  logAudit('Redo','Re-applied change');
+}
+
+// ─── Export ───────────────────────────────────────────────────────────────────
+function exportXLSX(){
+  const rows=[columns,...filtered.map(i=>columns.map(c=>data[i][c]??''))];
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=columns.map(c=>({wch:Math.max(c.length+4,14)}));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Inventory');
+  const fname='inventory_'+new Date().toISOString().slice(0,10)+'.xlsx';
+  XLSX.writeFile(wb,fname);
+  logAudit('Export',`${filtered.length.toLocaleString()} rows → ${fname}`);
+}
+
+// ─── Layout save/load ─────────────────────────────────────────────────────────
+function saveLayout(){
+  localStorage.setItem('wms_layout2',JSON.stringify({columns,frozenCols:[...frozenCols]}));
+  alert('Layout saved.');
+  logAudit('Save layout','Column order saved');
+}
+function loadLayout(){
+  const s=localStorage.getItem('wms_layout2');
+  if(!s){alert('No saved layout found.');return}
+  const lay=JSON.parse(s);
+  const valid=lay.columns.filter(c=>columns.includes(c));
+  const missing=columns.filter(c=>!valid.includes(c));
+  columns=[...valid,...missing];
+  frozenCols=new Set(lay.frozenCols||[]);
+  renderHead(); forceRender();
+  logAudit('Load layout','Restored saved layout');
+}
+
+// ─── Audit ────────────────────────────────────────────────────────────────────
+function toggleAudit(){showAudit=!showAudit;document.getElementById('auditPanel').classList.toggle('hidden',!showAudit)}
+function logAudit(action,detail){
+  const t=new Date().toLocaleTimeString();
+  auditLog.unshift({t,action,detail});
+  if(auditLog.length>200) auditLog.pop();
+  const el=document.getElementById('auditList');
+  if(el) el.innerHTML=auditLog.map(e=>`<div class="audit-entry"><strong>${esc(e.action)}</strong><br/>${esc(e.detail)}<div class="audit-time">${e.t}</div></div>`).join('');
+}
+
+// ─── Reset ────────────────────────────────────────────────────────────────────
+function resetApp(){
+  if(data.length&&!confirm('Load a new file? Unsaved changes will be lost.')) return;
+  data=[];filtered=[];columns=[];auditLog=[];undoStack=[];redoStack=[];
+  hide('mainView'); hide('topbarRight'); hide('auditPanel'); show('uploadView');
+  document.getElementById('fileInput').value='';
+  showAudit=false;
+}
+</script>
+</body>
+</html>
