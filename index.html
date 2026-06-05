@@ -669,14 +669,20 @@ function doRedo(){
 }
 
 // ─── Export ───────────────────────────────────────────────────────────────────
+const NUMERIC_COLS = new Set(['AVAILABLE QTY','RESERVED QTY','TOTAL']);
+function coerce(col, val){
+  if(!val && val!==0) return '';
+  if(NUMERIC_COLS.has(col)){const n=parseFloat(val);return isNaN(n)?val:n;}
+  return val;
+}
 function exportXLSX(){
-  const rows=[columns,...filtered.map(i=>columns.map(c=>data[i][c]??''))];
+  const rows=[columns,...filtered.map(i=>columns.map(c=>coerce(c,data[i][c]??'')))];
   const ws=XLSX.utils.aoa_to_sheet(rows);
   ws['!cols']=columns.map(c=>({wch:Math.max(c.length+4,14)}));
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Inventory');
   const fname='inventory_'+new Date().toISOString().slice(0,10)+'.xlsx';
-  XLSX.writeFile(wb,fname);
+  XLSX.writeFile(wb,fname,{compression:true,bookType:'xlsx'});
   logAudit('Export',`${filtered.length.toLocaleString()} rows → ${fname}`);
 }
 
